@@ -13,7 +13,7 @@
       "secret": true
     },
     {
-      "key": "topicID",
+      "key": "topicId",
       "hint": "A topic will be created if it does not exist.",
       "name": "Topic ID",
       "type": "string",
