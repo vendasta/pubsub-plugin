@@ -172,7 +172,7 @@ const setupBufferExportCode = (
                 batchId: Math.floor(Math.random() * 1000000),
                 retriesPerformedSoFar: 0,
             }
-            await meta.jobs.exportEventsWithRetry(jobPayload).runNow()
+            await meta.jobs.exportEventsWithRetry(jobPayload)
         },
     })
     meta.global.exportEventsWithRetry = async (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => {
