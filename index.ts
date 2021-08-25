@@ -6,30 +6,11 @@ type PubSubPlugin = Plugin<{
     global: {
         pubSubClient: PubSub
         pubSubTopic: Topic
-
-        exportEventsBuffer: ReturnType<typeof createBuffer>
-        exportEventsToIgnore: Set<string>
-        exportEventsWithRetry: (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => Promise<void>
     }
     config: {
         topicId: string
-
-        exportEventsBufferBytes: string
-        exportEventsBufferSeconds: string
-        exportEventsBuffer: ReturnType<typeof createBuffer>
-        exportEventsToIgnore: string
-        exportElementsOnAnyEvent: 'Yes' | 'No'
     },
-    jobs: {
-        exportEventsWithRetry: (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => Promise<void>
-    }
 }>
-
-interface UploadJobPayload {
-    batch: PluginEvent[]
-    batchId: number
-    retriesPerformedSoFar: number
-}
 
 export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
     const { global, attachments, config } = meta
@@ -66,50 +47,30 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
             }
         }
     }
-
-    setupBufferExportCode(meta, exportEventsToPubSub)
 }
 
-export async function exportEventsToPubSub(events: PluginEvent[], { global, config }: PluginMeta<PubSubPlugin>) {
+export async function exportEvents(events: PluginEvent[], { global, config }: PluginMeta<PubSubPlugin>) {
     if (!global.pubSubClient) {
         throw new Error('No PubSub client initialized!')
     }
     try {
         const messages = events.map((fullEvent) => {
-            const {
-                event: eventName,
-                properties,
-                $set,
-                $set_once,
-                distinct_id,
-                team_id,
-                site_url,
-                now,
-                sent_at,
-                uuid,
-                ..._discard
-            } = fullEvent
+            const { event, properties, $set, $set_once, distinct_id, team_id, site_url, now, sent_at, uuid, ...rest } =
+                fullEvent
             const ip = properties?.['$ip'] || fullEvent.ip
             const timestamp = fullEvent.timestamp || properties?.timestamp || now || sent_at
             let ingestedProperties = properties
             let elements = []
 
-            const shouldExportElementsForEvent =
-                eventName === '$autocapture' || config.exportElementsOnAnyEvent === 'Yes'
-
-            if (
-                shouldExportElementsForEvent &&
-                properties &&
-                '$elements' in properties &&
-                Array.isArray(properties['$elements'])
-            ) {
+            // only move prop to elements for the $autocapture action
+            if (event === '$autocapture' && properties?.['$elements']) {
                 const { $elements, ...props } = properties
                 ingestedProperties = props
                 elements = $elements
             }
 
             const message = {
-                eventName,
+                event,
                 distinct_id,
                 team_id,
                 ip,
@@ -135,79 +96,15 @@ export async function exportEventsToPubSub(events: PluginEvent[], { global, conf
         const end = Date.now() - start
 
         console.log(
-            `Published ${events.length} ${events.length > 1 ? 'events' : 'event'} to Pub/Sub. Took ${
+            `Published ${events.length} ${events.length > 1 ? 'events' : 'event'} to ${config.topicId}. Took ${
                 end / 1000
             } seconds.`
         )
     } catch (error) {
         console.error(
-            `Error publishing ${events.length} ${events.length > 1 ? 'events' : 'event'} to Pub/Sub: `,
+            `Error publishing ${events.length} ${events.length > 1 ? 'events' : 'event'} to ${config.topicId}: `,
             error
         )
         throw new RetryError(`Error publishing to Pub/Sub! ${JSON.stringify(error.errors)}`)
-    }
-}
-
-const setupBufferExportCode = (
-    meta: PluginMeta<PubSubPlugin>,
-    exportEvents: (events: PluginEvent[], meta: PluginMeta<PubSubPlugin>) => Promise<void>
-) => {
-    const uploadBytes = Math.max(
-        1024 * 1024,
-        Math.min(parseInt(meta.config.exportEventsBufferBytes) || 1024 * 1024, 1024 * 1024 * 10)
-    )
-    const uploadSeconds = Math.max(1, Math.min(parseInt(meta.config.exportEventsBufferSeconds) || 30, 600))
-
-    meta.global.exportEventsToIgnore = new Set(
-        meta.config.exportEventsToIgnore
-            ? meta.config.exportEventsToIgnore.split(',').map((event) => event.trim())
-            : null
-    )
-    meta.global.exportEventsBuffer = createBuffer({
-        limit: uploadBytes,
-        timeoutSeconds: uploadSeconds,
-        onFlush: async (batch) => {
-            const jobPayload = {
-                batch,
-                batchId: Math.floor(Math.random() * 1000000),
-                retriesPerformedSoFar: 0,
-            }
-            await meta.jobs.exportEventsWithRetry(jobPayload, meta).runNow()
-        },
-    })
-    meta.global.exportEventsWithRetry = async (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => {
-        const { jobs } = meta
-        try {
-            await exportEvents(payload.batch, meta)
-        } catch (err) {
-            if (err instanceof RetryError) {
-                if (payload.retriesPerformedSoFar < 15) {
-                    const nextRetrySeconds = 2 ** payload.retriesPerformedSoFar * 3
-                    console.log(`Enqueued batch ${payload.batchId} for retry in ${Math.round(nextRetrySeconds)}s`)
-
-                    await jobs
-                        .exportEventsWithRetry({ ...payload, retriesPerformedSoFar: payload.retriesPerformedSoFar + 1 })
-                        .runIn(nextRetrySeconds, 'seconds')
-                } else {
-                    console.log(
-                        `Dropped batch ${payload.batchId} after retrying ${payload.retriesPerformedSoFar} times`
-                    )
-                }
-            } else {
-                throw err
-            }
-        }
-    }
-}
-
-export const jobs: PubSubPlugin['jobs'] = {
-    exportEventsWithRetry: async (payload, meta) => {
-        await meta.global.exportEventsWithRetry(payload, meta)
-    },
-}
-
-export const onEvent: PubSubPlugin['onEvent'] = (event, { global }) => {
-    if (!global.exportEventsToIgnore.has(event.event)) {
-        global.exportEventsBuffer.add(event, JSON.stringify(event).length)
     }
 }
