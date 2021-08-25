@@ -1,6 +1,6 @@
 import { createBuffer } from '@posthog/plugin-contrib'
 import { Plugin, PluginMeta, PluginEvent, RetryError } from '@posthog/plugin-scaffold'
-import { PubSub, Topic } from "@google-cloud/pubsub";
+import { PubSub, Topic } from "@google-cloud/pubsub"
 
 type PubSubPlugin = Plugin<{
     global: {
@@ -21,7 +21,7 @@ type PubSubPlugin = Plugin<{
         exportElementsOnAnyEvent: 'Yes' | 'No'
     },
     jobs: {
-        exportEventsWithRetry: UploadJobPayload
+        exportEventsWithRetry: (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => Promise<void>
     }
 }>
 
@@ -45,7 +45,7 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
         projectId: credentials['project_id'],
         credentials,
     })
-    global.pubSubTopic = global.pubSubClient.topic(config.topicId);
+    global.pubSubTopic = global.pubSubClient.topic(config.topicId)
 
     try {
         // topic exists
@@ -58,7 +58,7 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
         console.log(`Creating PubSub Topic - ${config.topicId}`)
 
         try {
-            await global.pubSubTopic.create();
+            await global.pubSubTopic.create()
         } catch (error) {
             // a different worker already created the table
             if (!error.message.includes('ALREADY_EXISTS')) {
@@ -121,17 +121,17 @@ export async function exportEventsToPubSub(events: PluginEvent[], { global, conf
                 people_set: $set || {},
                 people_set_once: $set_once || {},
             }
-            return Buffer.from(JSON.stringify(message));
+            return Buffer.from(JSON.stringify(message))
         })
 
         const start = Date.now()
         await Promise.all(
             messages.map((dataBuf) =>
                 global.pubSubTopic.publish(dataBuf).then((messageId) => {
-                    return messageId;
+                    return messageId
                 })
             )
-        );
+        )
         const end = Date.now() - start
 
         console.log(
@@ -172,7 +172,7 @@ const setupBufferExportCode = (
                 batchId: Math.floor(Math.random() * 1000000),
                 retriesPerformedSoFar: 0,
             }
-            await meta.jobs.exportEventsWithRetry(jobPayload, meta)
+            await meta.jobs.exportEventsWithRetry(jobPayload, meta).runNow()
         },
     })
     meta.global.exportEventsWithRetry = async (payload: UploadJobPayload, meta: PluginMeta<PubSubPlugin>) => {
