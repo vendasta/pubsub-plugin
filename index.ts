@@ -52,7 +52,7 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
         await global.pubSubTopic.getMetadata()
     } catch (error) {
         // some other error? abort!
-        if (!error.message.includes('Not found')) {
+        if (!error.message.includes("NOT_FOUND")) {
             throw new Error(error)
         }
         console.log(`Creating PubSub Topic - ${config.topicId}`)
@@ -61,7 +61,7 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
             await global.pubSubTopic.create();
         } catch (error) {
             // a different worker already created the table
-            if (!error.message.includes('Already Exists')) {
+            if (!error.message.includes('ALREADY_EXISTS')) {
                 throw error
             }
         }
