@@ -25,12 +25,7 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
         projectId: credentials['project_id'],
         credentials,
     })
-    global.pubSubTopic = global.pubSubClient.topic(config.topicId, {
-        batching: {
-            maxMessages: 10,
-            maxMilliseconds: 5 * 1000,
-        },
-    });
+    global.pubSubTopic = global.pubSubClient.topic(config.topicId);
 
     try {
         // topic exists
