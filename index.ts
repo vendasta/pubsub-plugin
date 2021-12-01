@@ -20,14 +20,14 @@ export const setupPlugin: PubSubPlugin['setupPlugin'] = async (meta) => {
         throw new Error('Topic ID not provided!')
     }
 
-    const credentials = JSON.parse(attachments.googleCloudKeyJson.contents.toString())
-    global.pubSubClient = new PubSub({
-        projectId: credentials['project_id'],
-        credentials,
-    })
-    global.pubSubTopic = global.pubSubClient.topic(config.topicId);
-
     try {
+        const credentials = JSON.parse(attachments.googleCloudKeyJson.contents.toString())
+        global.pubSubClient = new PubSub({
+            projectId: credentials['project_id'],
+            credentials,
+        })
+        global.pubSubTopic = global.pubSubClient.topic(config.topicId);
+
         // topic exists
         await global.pubSubTopic.getMetadata()
     } catch (error) {
